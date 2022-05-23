@@ -72,31 +72,39 @@ impl Display for Function {
     }
 }
 
-enum FunctionToken {
-    RParen,
-    LParen,
-    Literal(f64),
-    Plus,
-    Minus,
-    Times,
-    Div,
-    Pow,
-    Builtin(BuiltinFunction),
-}
+mod string_parse {
+    #[derive(Debug)]
+    pub enum FunctionToken {
+        RParen,
+        LParen,
+        Literal(f64),
+        Plus,
+        Minus,
+        Times,
+        Div,
+        Pow,
+        Builtin(crate::BuiltinFunction),
+    }
 
-fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>, FunctionParseError> {
-    todo!();
-}
-
-#[derive(Debug)]
-pub enum FunctionParseError {}
-
-impl FromStr for Function {
-    type Err = FunctionParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    pub fn parse_str(s: &str) -> Result<crate::Function, FunctionParseError> {
         let tokens = tokenize_str(s);
         todo!();
+    }
+
+    fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>, FunctionParseError> {
+        let mut tokens = Vec::new();
+        Ok(tokens)
+    }
+
+    #[derive(Debug)]
+    pub enum FunctionParseError {}
+}
+
+impl FromStr for Function {
+    type Err = string_parse::FunctionParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        string_parse::parse_str(s)
     }
 }
 

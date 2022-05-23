@@ -27,7 +27,7 @@ pub enum Function {
 }
 
 /// Enumeration of all errors which can occur while evaluating a function.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FunctionError {
     /// Caused by division by zero.
     DivideByZero,
@@ -58,6 +58,16 @@ impl Function {
     /// );
     /// assert_eq!(func.eval(2.0).unwrap(), 3.0);
     /// ```
+    ///
+    /// ```
+    /// # use function::{Function, BinaryOperator, FunctionError};
+    /// // 1/x
+    /// let func = Function::BinaryOp(
+    ///     Box::new(Function::Lit(1.0)),
+    ///     BinaryOperator::Div,
+    ///     Box::new(Function::Variable),
+    /// );
+    /// assert_eq!(func.eval(0.0).unwrap_err(), FunctionError::DivideByZero);
     pub fn eval(&self, value: f64) -> Result<f64, FunctionError> {
         match self {
             Self::Lit(literal) => Ok(*literal),

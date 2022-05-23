@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 pub use std::f64::consts::{E, PI};
 
@@ -69,6 +69,34 @@ impl Function {
 impl Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.display_with_variable("x"))
+    }
+}
+
+enum FunctionToken {
+    RParen,
+    LParen,
+    Literal(f64),
+    Plus,
+    Minus,
+    Times,
+    Div,
+    Pow,
+    Builtin(BuiltinFunction),
+}
+
+fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>, FunctionParseError> {
+    todo!();
+}
+
+#[derive(Debug)]
+pub enum FunctionParseError {}
+
+impl FromStr for Function {
+    type Err = FunctionParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let tokens = tokenize_str(s);
+        todo!();
     }
 }
 
@@ -247,5 +275,11 @@ mod test {
         println!("{}", func);
         let result = f64::sin(2.0 * 3.0) * f64::sin(2.0 * 3.0);
         assert_eq!(func.eval(3.0).unwrap(), result);
+    }
+
+    #[test]
+    fn parse() {
+        let func: Function = "".parse().unwrap();
+        println!("{}", func);
     }
 }

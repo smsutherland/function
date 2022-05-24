@@ -73,6 +73,8 @@ impl Display for Function {
 }
 
 mod string_parse {
+    use crate::Function;
+
     #[derive(Debug)]
     pub enum FunctionToken {
         RParen,
@@ -86,18 +88,117 @@ mod string_parse {
         Builtin(crate::BuiltinFunction),
     }
 
-    pub fn parse_str(s: &str) -> Result<crate::Function, FunctionParseError> {
-        let tokens = tokenize_str(s);
+    pub fn parse_str(s: &str) -> Result<Function, FunctionParseError> {
+        let tokens = tokenize_str(s)?;
         todo!();
     }
 
     fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>, FunctionParseError> {
+        enum TokenState {
+            Start,
+            InNum,
+            InBuiltin,
+        }
+
         let mut tokens = Vec::new();
+        let mut current_token = String::new();
+        let mut current_state = TokenState::Start;
+        for (i, c) in s.chars().enumerate() {
+            let mut repeat = true;
+            while repeat {
+                repeat = false;
+                match current_state {
+                    TokenState::Start => {
+                        if c.is_numeric() || c == '.' {
+                            current_token.push(c);
+                            current_state = TokenState::InNum;
+                        }
+                        if c.is_alphabetic() {
+                            current_token.push(c);
+                            current_state = TokenState::InBuiltin;
+                            continue;
+                        }
+                        if c.is_whitespace() {
+                            continue;
+                        }
+                        match c {
+                            '(' => {
+                                tokens.push(FunctionToken::RParen);
+                            }
+                            ')' => {
+                                tokens.push(FunctionToken::LParen);
+                            }
+                            '+' => {
+                                tokens.push(FunctionToken::Plus);
+                            }
+                            '-' => {
+                                tokens.push(FunctionToken::Minus);
+                            }
+                            '*' => {
+                                tokens.push(FunctionToken::Times);
+                            }
+                            '/' => {
+                                tokens.push(FunctionToken::Div);
+                            }
+                            '^' => {
+                                tokens.push(FunctionToken::Pow);
+                            }
+                            _ => {
+                                return Err(FunctionParseError {
+                                    cause: FunctionParseErrorCause::UnexpectedCharacter,
+                                    position: i,
+                                });
+                            }
+                        }
+                    }
+                    TokenState::InNum => {
+                        if c.is_numeric() || c == '.' {
+                            current_token.push(c);
+                        } else {
+                            match current_token.parse() {
+                                Ok(num) => tokens.push(FunctionToken::Literal(num)),
+                                Err(_) => {
+                                    return Err(FunctionParseError {
+                                        cause: FunctionParseErrorCause::LiteralParseFailure,
+                                        position: i,
+                                    })
+                                }
+                            }
+                            repeat = true;
+                        }
+                    }
+                    TokenState::InBuiltin => {
+                        if c == '(' {
+                            if let Ok(b) = current_token.trim().parse::<crate::BuiltinFunction>() {
+                                tokens.push(FunctionToken::Builtin(b));
+                            } else {
+                                return Err(FunctionParseError {
+                                    cause: FunctionParseErrorCause::BuiltinParseFailure,
+                                    position: i,
+                                });
+                            }
+                        } else {
+                            current_token.push(c);
+                        }
+                    }
+                }
+            }
+        }
         Ok(tokens)
     }
 
     #[derive(Debug)]
-    pub enum FunctionParseError {}
+    pub struct FunctionParseError {
+        pub cause: FunctionParseErrorCause,
+        pub position: usize,
+    }
+
+    #[derive(Debug)]
+    pub enum FunctionParseErrorCause {
+        UnexpectedCharacter,
+        LiteralParseFailure,
+        BuiltinParseFailure,
+    }
 }
 
 impl FromStr for Function {
@@ -183,6 +284,17 @@ impl BuiltinFunction {
     fn eval(&self, input: f64) -> Result<f64, FunctionError> {
         match self {
             BuiltinFunction::Sin => Ok(f64::sin(input)),
+        }
+    }
+}
+
+impl FromStr for BuiltinFunction {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "sin" => Ok(BuiltinFunction::Sin),
+            _ => Err(()),
         }
     }
 }
@@ -289,5 +401,12 @@ mod test {
     fn parse() {
         let func: Function = "".parse().unwrap();
         println!("{}", func);
+    }
+
+    #[test]
+    fn rust_parsing() {
+        let s = ".03";
+        let num: f64 = s.parse().unwrap();
+        assert_eq!(num, 0.03);
     }
 }

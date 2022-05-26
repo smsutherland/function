@@ -2,12 +2,12 @@ use std::{fmt::Display, str::FromStr};
 
 pub use std::f64::consts::{E, PI};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Function {
     Lit(f64),
     BinaryOp(Box<Function>, BinaryOperator, Box<Function>),
     UnaryOp(UnaryOperator, Box<Function>),
-    Builtin(BuiltinFunction),
+    Builtin(BuiltinFunction, Box<Function>),
     Composition(Box<Function>, Box<Function>),
     Variable,
 }
@@ -31,7 +31,10 @@ impl Function {
                 let operand_value = operand.eval(input)?;
                 op.eval(operand_value)
             }
-            Self::Builtin(builtin) => builtin.eval(input),
+            Self::Builtin(builtin, inner) => {
+                let input_value = inner.eval(input)?;
+                builtin.eval(input_value)
+            }
             Self::Composition(outer, inner) => {
                 let inner_value = inner.eval(input)?;
                 outer.eval(inner_value)
@@ -52,7 +55,9 @@ impl Function {
                 let operand_value = operand.display_with_variable(variable);
                 format!("{}{}", op, operand_value)
             }
-            Self::Builtin(builtin) => format!("{}({})", builtin, variable),
+            Self::Builtin(builtin, inner) => {
+                format!("{}({})", builtin, inner.display_with_variable(variable))
+            }
             Self::Composition(outer, inner) => {
                 let inner_str = inner.display_with_variable(variable);
                 outer.display_with_variable(&inner_str)
@@ -73,10 +78,19 @@ impl Display for Function {
 }
 
 mod string_parse {
+    use std::iter::Peekable;
+
     use crate::Function;
+    type Result<T> = std::result::Result<T, FunctionParseError>;
 
     #[derive(Debug)]
-    pub enum FunctionToken {
+    struct FunctionToken {
+        kind: FunctionTokenKind,
+        pos: usize,
+    }
+
+    #[derive(Debug)]
+    enum FunctionTokenKind {
         RParen,
         LParen,
         Literal(f64),
@@ -86,14 +100,150 @@ mod string_parse {
         Div,
         Pow,
         Builtin(crate::BuiltinFunction),
+        Variable,
+        EOF,
     }
 
-    pub fn parse_str(s: &str) -> Result<Function, FunctionParseError> {
+    macro_rules! token_iter {
+        () => {
+            Peekable<impl Iterator<Item = FunctionToken>>
+        };
+    }
+
+    fn item(tokens: &mut token_iter!()) -> Result<Function> {
+        let next_token = tokens.next().expect("Ran out of tokens");
+        match next_token.kind {
+            FunctionTokenKind::LParen => {
+                let item = add_expr(tokens)?;
+                let next_token = tokens.next().expect("Ran out of tokens");
+                if let FunctionTokenKind::RParen = next_token.kind {
+                    Ok(item)
+                } else {
+                    Err(FunctionParseError {
+                        cause: FunctionParseErrorCause::UnmatchedParentheses,
+                        position: next_token.pos,
+                    })
+                }
+            }
+            FunctionTokenKind::Literal(lit) => Ok(Function::Lit(lit)),
+            FunctionTokenKind::Builtin(builtin) => {
+                if let FunctionTokenKind::RParen = tokens.next().expect("Ran out of tokens").kind {
+                    let item = function(tokens)?;
+                    let next_token = tokens.next().expect("Ran out of tokens");
+                    if let FunctionTokenKind::LParen = next_token.kind {
+                        Ok(Function::Builtin(builtin, Box::new(item)))
+                    } else {
+                        Err(FunctionParseError {
+                            cause: FunctionParseErrorCause::UnexpectedCharacter,
+                            position: next_token.pos,
+                        })
+                    }
+                } else {
+                    Err(FunctionParseError {
+                        cause: FunctionParseErrorCause::UnexpectedCharacter,
+                        position: next_token.pos, // TODO: handle this properly
+                    })
+                }
+            }
+            FunctionTokenKind::Variable => Ok(Function::Variable),
+            FunctionTokenKind::RParen
+            | FunctionTokenKind::Plus
+            | FunctionTokenKind::Minus
+            | FunctionTokenKind::Times
+            | FunctionTokenKind::Div
+            | FunctionTokenKind::Pow
+            | FunctionTokenKind::EOF => Err(FunctionParseError {
+                cause: FunctionParseErrorCause::UnexpectedToken,
+                position: next_token.pos,
+            }),
+        }
+    }
+
+    fn pow_expr(tokens: &mut token_iter!()) -> Result<Function> {
+        let lhs = item(tokens)?;
+        if let Some(FunctionToken {
+            kind: FunctionTokenKind::Pow,
+            pos: _,
+        }) = tokens.peek()
+        {
+            tokens.next().unwrap();
+            let rhs = item(tokens)?;
+            Ok(Function::BinaryOp(
+                Box::new(lhs),
+                crate::BinaryOperator::Pow,
+                Box::new(rhs),
+            ))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn mul_expr(tokens: &mut token_iter!()) -> Result<Function> {
+        let lhs = pow_expr(tokens)?;
+        if let Some(FunctionToken {
+            kind: FunctionTokenKind::Times | FunctionTokenKind::Div,
+            pos: _,
+        }) = tokens.peek()
+        {
+            let op_token = tokens.next().unwrap();
+            let rhs = pow_expr(tokens)?;
+            Ok(Function::BinaryOp(
+                Box::new(lhs),
+                match op_token.kind {
+                    FunctionTokenKind::Times => crate::BinaryOperator::Times,
+                    FunctionTokenKind::Div => crate::BinaryOperator::Div,
+                    _ => unreachable!(),
+                },
+                Box::new(rhs),
+            ))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn add_expr(tokens: &mut token_iter!()) -> Result<Function> {
+        let lhs = mul_expr(tokens)?;
+        if let Some(FunctionToken {
+            kind: FunctionTokenKind::Plus | FunctionTokenKind::Minus,
+            pos: _,
+        }) = tokens.peek()
+        {
+            let op_token = tokens.next().unwrap();
+            let rhs = mul_expr(tokens)?;
+            Ok(Function::BinaryOp(
+                Box::new(lhs),
+                match op_token.kind {
+                    FunctionTokenKind::Plus => crate::BinaryOperator::Plus,
+                    FunctionTokenKind::Minus => crate::BinaryOperator::Minus,
+                    _ => unreachable!(),
+                },
+                Box::new(rhs),
+            ))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn function(tokens: &mut token_iter!()) -> Result<Function> {
+        let expr = add_expr(tokens)?;
+        let last_token = tokens.next().expect("Ran out of tokens");
+        if let FunctionTokenKind::EOF = last_token.kind {
+            return Ok(expr);
+        } else {
+            Err(FunctionParseError {
+                cause: FunctionParseErrorCause::TrailingTokens,
+                position: last_token.pos,
+            })
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Result<Function> {
         let tokens = tokenize_str(s)?;
-        todo!();
+        function(&mut tokens.into_iter().peekable())
     }
 
-    fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>, FunctionParseError> {
+    fn tokenize_str(s: &str) -> Result<Vec<FunctionToken>> {
+        #[derive(Debug)]
         enum TokenState {
             Start,
             InNum,
@@ -103,6 +253,7 @@ mod string_parse {
         let mut tokens = Vec::new();
         let mut current_token = String::new();
         let mut current_state = TokenState::Start;
+        let mut token_start = 0;
         for (i, c) in s.chars().enumerate() {
             let mut repeat = true;
             while repeat {
@@ -112,10 +263,20 @@ mod string_parse {
                         if c.is_numeric() || c == '.' {
                             current_token.push(c);
                             current_state = TokenState::InNum;
+                            token_start = i;
+                            continue;
+                        }
+                        if c == 'x' {
+                            tokens.push(FunctionToken {
+                                kind: FunctionTokenKind::Variable,
+                                pos: i,
+                            });
+                            continue;
                         }
                         if c.is_alphabetic() {
                             current_token.push(c);
                             current_state = TokenState::InBuiltin;
+                            token_start = i;
                             continue;
                         }
                         if c.is_whitespace() {
@@ -123,25 +284,46 @@ mod string_parse {
                         }
                         match c {
                             '(' => {
-                                tokens.push(FunctionToken::RParen);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::LParen,
+                                    pos: i,
+                                });
                             }
                             ')' => {
-                                tokens.push(FunctionToken::LParen);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::RParen,
+                                    pos: i,
+                                });
                             }
                             '+' => {
-                                tokens.push(FunctionToken::Plus);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Plus,
+                                    pos: i,
+                                });
                             }
                             '-' => {
-                                tokens.push(FunctionToken::Minus);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Minus,
+                                    pos: i,
+                                });
                             }
                             '*' => {
-                                tokens.push(FunctionToken::Times);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Times,
+                                    pos: i,
+                                });
                             }
                             '/' => {
-                                tokens.push(FunctionToken::Div);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Div,
+                                    pos: i,
+                                });
                             }
                             '^' => {
-                                tokens.push(FunctionToken::Pow);
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Pow,
+                                    pos: i,
+                                });
                             }
                             _ => {
                                 return Err(FunctionParseError {
@@ -156,21 +338,32 @@ mod string_parse {
                             current_token.push(c);
                         } else {
                             match current_token.parse() {
-                                Ok(num) => tokens.push(FunctionToken::Literal(num)),
+                                Ok(num) => tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Literal(num),
+                                    pos: token_start,
+                                }),
                                 Err(_) => {
                                     return Err(FunctionParseError {
                                         cause: FunctionParseErrorCause::LiteralParseFailure,
-                                        position: i,
+                                        position: i - 1,
                                     })
                                 }
                             }
+                            current_token.clear();
+                            current_state = TokenState::Start;
                             repeat = true;
                         }
                     }
                     TokenState::InBuiltin => {
                         if c == '(' {
                             if let Ok(b) = current_token.trim().parse::<crate::BuiltinFunction>() {
-                                tokens.push(FunctionToken::Builtin(b));
+                                tokens.push(FunctionToken {
+                                    kind: FunctionTokenKind::Builtin(b),
+                                    pos: token_start,
+                                });
+                                current_token.clear();
+                                current_state = TokenState::Start;
+                                repeat = true;
                             } else {
                                 return Err(FunctionParseError {
                                     cause: FunctionParseErrorCause::BuiltinParseFailure,
@@ -184,6 +377,28 @@ mod string_parse {
                 }
             }
         }
+        if !current_token.is_empty() {
+            if let Ok(lit) = current_token.parse() {
+                tokens.push(FunctionToken {
+                    kind: FunctionTokenKind::Literal(lit),
+                    pos: s.len() - 1,
+                })
+            } else if let Ok(builtin) = current_token.parse() {
+                tokens.push(FunctionToken {
+                    kind: FunctionTokenKind::Builtin(builtin),
+                    pos: s.len() - 1,
+                })
+            } else {
+                return Err(FunctionParseError {
+                    cause: FunctionParseErrorCause::TrailingTokens,
+                    position: s.len() - current_token.len(),
+                });
+            }
+        }
+        tokens.push(FunctionToken {
+            kind: FunctionTokenKind::EOF,
+            pos: s.len(),
+        });
         Ok(tokens)
     }
 
@@ -198,6 +413,10 @@ mod string_parse {
         UnexpectedCharacter,
         LiteralParseFailure,
         BuiltinParseFailure,
+        TrailingTokens,
+        ExpectedItem,
+        UnexpectedToken,
+        UnmatchedParentheses,
     }
 }
 
@@ -209,7 +428,7 @@ impl FromStr for Function {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOperator {
     Plus,
     Minus,
@@ -254,7 +473,7 @@ impl Display for BinaryOperator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
     Negate,
 }
@@ -275,7 +494,7 @@ impl Display for UnaryOperator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltinFunction {
     Sin,
 }
@@ -364,10 +583,7 @@ mod test {
     #[test]
     fn use_sin() {
         // sin(x)
-        let func = Function::Composition(
-            Box::new(Function::Builtin(BuiltinFunction::Sin)),
-            Box::new(Function::Variable),
-        );
+        let func = Function::Builtin(BuiltinFunction::Sin, Box::new(Function::Variable));
         println!("{}", func);
         let result = f64::sin(2.5 * PI);
         assert_eq!(func.eval(2.5 * PI).unwrap(), result);
@@ -376,8 +592,8 @@ mod test {
     #[test]
     fn composition() {
         // sin(2x)
-        let inner = Function::Composition(
-            Box::new(Function::Builtin(BuiltinFunction::Sin)),
+        let inner = Function::Builtin(
+            BuiltinFunction::Sin,
             Box::new(Function::BinaryOp(
                 Box::new(Function::Lit(2.0)),
                 BinaryOperator::Times,
@@ -399,7 +615,19 @@ mod test {
 
     #[test]
     fn parse() {
-        let func: Function = "".parse().unwrap();
+        let func: Function = "1 + x".parse().unwrap();
+        println!("{}", func);
+        let expected = Function::BinaryOp(
+            Box::new(Function::Lit(1.0)),
+            BinaryOperator::Plus,
+            Box::new(Function::Variable),
+        );
+        assert_eq!(func, expected);
+    }
+
+    #[test]
+    fn parse_complex() {
+        let func: Function = "5*(x + 1)^2".parse().unwrap();
         println!("{}", func);
     }
 

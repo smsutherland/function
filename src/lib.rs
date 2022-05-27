@@ -121,9 +121,9 @@ impl Function {
     /// ```
     /// # use function::{Function, BuiltinFunction, BinaryOperator};
     /// // sin(x)
-    /// let inner = Function::Composition(
-    ///     Box::new(Function::Builtin(BuiltinFunction::Sin)),
-    ///     Box::new(Function::Variable),
+    /// let inner = Function::Builtin(
+    ///     BuiltinFunction::Sin,
+    ///     Box::new(Function::Variable)
     /// );
     /// // x^2
     /// let outer = Function::BinaryOp(

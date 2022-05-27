@@ -127,10 +127,10 @@ mod string_parse {
             }
             FunctionTokenKind::Literal(lit) => Ok(Function::Lit(lit)),
             FunctionTokenKind::Builtin(builtin) => {
-                if let FunctionTokenKind::RParen = tokens.next().expect("Ran out of tokens").kind {
-                    let item = function(tokens)?;
+                if let FunctionTokenKind::LParen = tokens.next().expect("Ran out of tokens").kind {
+                    let item = add_expr(tokens)?;
                     let next_token = tokens.next().expect("Ran out of tokens");
-                    if let FunctionTokenKind::LParen = next_token.kind {
+                    if let FunctionTokenKind::RParen = next_token.kind {
                         Ok(Function::Builtin(builtin, Box::new(item)))
                     } else {
                         Err(FunctionParseError {
@@ -141,7 +141,7 @@ mod string_parse {
                 } else {
                     Err(FunctionParseError {
                         cause: FunctionParseErrorCause::UnexpectedCharacter,
-                        position: next_token.pos, // TODO: handle this properly
+                        position: next_token.pos,
                     })
                 }
             }
@@ -354,26 +354,46 @@ mod string_parse {
                             repeat = true;
                         }
                     }
-                    TokenState::InBuiltin => {
-                        if c == '(' {
-                            if let Ok(b) = current_token.trim().parse::<crate::BuiltinFunction>() {
-                                tokens.push(FunctionToken {
-                                    kind: FunctionTokenKind::Builtin(b),
-                                    pos: token_start,
-                                });
-                                current_token.clear();
-                                current_state = TokenState::Start;
-                                repeat = true;
-                            } else {
-                                return Err(FunctionParseError {
-                                    cause: FunctionParseErrorCause::BuiltinParseFailure,
-                                    position: i,
-                                });
-                            }
-                        } else {
-                            current_token.push(c);
+                    TokenState::InBuiltin => match current_token.as_str() {
+                        "pi" => {
+                            tokens.push(FunctionToken {
+                                kind: FunctionTokenKind::Literal(crate::PI),
+                                pos: token_start,
+                            });
+                            current_token.clear();
+                            current_state = TokenState::Start;
+                            repeat = true;
                         }
-                    }
+                        "e" => {
+                            tokens.push(FunctionToken {
+                                kind: FunctionTokenKind::Literal(crate::E),
+                                pos: token_start,
+                            });
+                            current_token.clear();
+                            current_state = TokenState::Start;
+                            repeat = true;
+                        }
+                        _ => {
+                            if c == '(' {
+                                if let Ok(b) = current_token.parse::<crate::BuiltinFunction>() {
+                                    tokens.push(FunctionToken {
+                                        kind: FunctionTokenKind::Builtin(b),
+                                        pos: token_start,
+                                    });
+                                    current_token.clear();
+                                    current_state = TokenState::Start;
+                                    repeat = true;
+                                } else {
+                                    return Err(FunctionParseError {
+                                        cause: FunctionParseErrorCause::BuiltinParseFailure,
+                                        position: i,
+                                    });
+                                }
+                            } else {
+                                current_token.push(c);
+                            }
+                        }
+                    },
                 }
             }
         }
@@ -636,5 +656,11 @@ mod test {
         let s = ".03";
         let num: f64 = s.parse().unwrap();
         assert_eq!(num, 0.03);
+    }
+
+    #[test]
+    fn parse_sin() {
+        let func: Function = "sin(pi*x)".parse().unwrap();
+        assert_eq!(func.eval(1.0).unwrap(), f64::sin(PI));
     }
 }

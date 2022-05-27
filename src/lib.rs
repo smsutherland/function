@@ -492,23 +492,37 @@ mod string_parse {
         Ok(tokens)
     }
 
+    /// Error type for function string parsing.
     #[derive(Debug)]
     pub struct FunctionParseError {
+        /// Cause of the error.
         pub cause: FunctionParseErrorCause,
+        /// Index in the string at which the error occurred.
         pub position: usize,
     }
 
+    /// Enumeration of possible causes for parse errors.
     #[derive(Debug)]
     pub enum FunctionParseErrorCause {
+        /// A character was parsed that is not understood by the parser.
         UnexpectedCharacter,
+        /// There was an issue in parsing a numeric literal.
         LiteralParseFailure,
+        /// There [built-in] function was not recognized.
+        ///
+        /// [built-in]: enum@crate::BuiltinFunction
         BuiltinParseFailure,
+        /// The function finished parsing before the end of the string.
         TrailingTokens,
+        /// The parser expected an item at the location, but couldn't parse one.
         ExpectedItem,
+        /// The parser encountered a token it didn't expect at that point.
         UnexpectedToken,
+        /// A left paren was not paired with a matching right paren.
         UnmatchedParentheses,
     }
 }
+pub use crate::string_parse::{FunctionParseError, FunctionParseErrorCause};
 
 impl FromStr for Function {
     type Err = string_parse::FunctionParseError;
@@ -518,12 +532,18 @@ impl FromStr for Function {
     }
 }
 
+/// Enumeration of binary operators for use in [`Function::BinaryOp`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOperator {
+    /// Addition.
     Plus,
+    /// Subtraction.
     Minus,
+    /// Multiplication.
     Times,
+    /// Division.
     Div,
+    /// Exponentiation.
     Pow,
 }
 
@@ -563,8 +583,10 @@ impl Display for BinaryOperator {
     }
 }
 
+/// Enumeration of unary operators for use in [`Function::UnaryOp`]
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
+    /// Negation
     Negate,
 }
 
@@ -584,8 +606,12 @@ impl Display for UnaryOperator {
     }
 }
 
+/// Enumeration of built in functions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltinFunction {
+    /// [Sine] function.
+    ///
+    /// [Sine]: https://en.wikipedia.org/wiki/Sine_and_cosine
     Sin,
 }
 

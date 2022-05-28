@@ -25,7 +25,7 @@
 //! ### Automatic parsing
 //! [`Function`] implements [`FromStr`] (requires the `parse` feature to be enabled)
 //! and therefore functions can be derived from strings.
-//! ```no_run
+//! ```
 //! # use function::{Function,PI};
 //! let func: Function = "sin(x)^2".parse().unwrap();
 //! assert!(func.eval(PI).unwrap() < 1e-15);
@@ -205,7 +205,7 @@ mod string_parse {
         Pow,
         Builtin(crate::BuiltinFunction),
         Variable,
-        EOF,
+        Eof,
     }
 
     macro_rules! token_iter {
@@ -256,7 +256,7 @@ mod string_parse {
             | FunctionTokenKind::Times
             | FunctionTokenKind::Div
             | FunctionTokenKind::Pow
-            | FunctionTokenKind::EOF => Err(FunctionParseError {
+            | FunctionTokenKind::Eof => Err(FunctionParseError {
                 cause: FunctionParseErrorCause::UnexpectedToken,
                 position: next_token.pos,
             }),
@@ -331,8 +331,8 @@ mod string_parse {
     fn function(tokens: &mut token_iter!()) -> Result<Function> {
         let expr = add_expr(tokens)?;
         let last_token = tokens.next().expect("Ran out of tokens");
-        if let FunctionTokenKind::EOF = last_token.kind {
-            return Ok(expr);
+        if let FunctionTokenKind::Eof = last_token.kind {
+            Ok(expr)
         } else {
             Err(FunctionParseError {
                 cause: FunctionParseErrorCause::TrailingTokens,
@@ -520,7 +520,7 @@ mod string_parse {
             }
         }
         tokens.push(FunctionToken {
-            kind: FunctionTokenKind::EOF,
+            kind: FunctionTokenKind::Eof,
             pos: s.len(),
         });
         Ok(tokens)

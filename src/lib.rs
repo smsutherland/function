@@ -1,4 +1,3 @@
-#![cfg_attr(doc, feature(doc_cfg))]
 #![warn(missing_docs)]
 
 //! A mathematical library for creating, operating on, and evaluating functions.
@@ -35,7 +34,6 @@
 //! [`FromStr`]: std::str::FromStr
 
 use std::fmt::Display;
-#[cfg(feature = "parse")]
 use std::str::FromStr;
 
 pub use std::f64::consts::{E, PI};
@@ -183,7 +181,6 @@ impl Display for Function {
     }
 }
 
-#[cfg(feature = "parse")]
 mod string_parse {
     use std::iter::Peekable;
 
@@ -530,7 +527,6 @@ mod string_parse {
     }
 
     /// Error type for function string parsing.
-    #[doc(cfg(feature = "parse"))]
     #[derive(Debug)]
     pub struct FunctionParseError {
         /// Cause of the error.
@@ -540,7 +536,6 @@ mod string_parse {
     }
 
     /// Enumeration of possible causes for parse errors.
-    #[doc(cfg(feature = "parse"))]
     #[derive(Debug)]
     pub enum FunctionParseErrorCause {
         /// A character was parsed that is not understood by the parser.
@@ -561,11 +556,8 @@ mod string_parse {
         UnmatchedParentheses,
     }
 }
-#[cfg(feature = "parse")]
 pub use crate::string_parse::{FunctionParseError, FunctionParseErrorCause};
 
-#[cfg(feature = "parse")]
-#[doc(cfg(feature = "parse"))]
 impl FromStr for Function {
     type Err = string_parse::FunctionParseError;
 
@@ -665,8 +657,6 @@ impl BuiltinFunction {
     }
 }
 
-#[cfg(feature = "parse")]
-#[doc(cfg(feature = "parse"))]
 impl FromStr for BuiltinFunction {
     type Err = ();
 
@@ -773,7 +763,6 @@ mod test {
         assert_eq!(func.eval(3.0).unwrap(), result);
     }
 
-    #[cfg(feature = "parse")]
     #[test]
     fn parse() {
         let func: Function = "1 + x".parse().unwrap();
@@ -786,14 +775,12 @@ mod test {
         assert_eq!(func, expected);
     }
 
-    #[cfg(feature = "parse")]
     #[test]
     fn parse_complex() {
         let func: Function = "5*(x + 1)^2".parse().unwrap();
         println!("{}", func);
     }
 
-    #[cfg(feature = "parse")]
     #[test]
     fn rust_parsing() {
         let s = ".03";
@@ -801,7 +788,6 @@ mod test {
         assert_eq!(num, 0.03);
     }
 
-    #[cfg(feature = "parse")]
     #[test]
     fn parse_sin() {
         let func: Function = "sin(pi*x)".parse().unwrap();

@@ -782,13 +782,6 @@ mod test {
     }
 
     #[test]
-    fn rust_parsing() {
-        let s = ".03";
-        let num: f64 = s.parse().unwrap();
-        assert_eq!(num, 0.03);
-    }
-
-    #[test]
     fn parse_sin() {
         let func: Function = "sin(pi*x)".parse().unwrap();
         assert_eq!(func.eval(1.0).unwrap(), f64::sin(PI));

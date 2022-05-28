@@ -23,8 +23,7 @@
 //! if you want to specifically define and optimize your functions.
 //!
 //! ### Automatic parsing
-//! [`Function`] implements [`FromStr`] (requires the `parse` feature to be enabled)
-//! and therefore functions can be derived from strings.
+//! [`Function`] implements [`FromStr`] and therefore functions can be derived from strings.
 //! ```
 //! # use function::{Function,PI};
 //! let func: Function = "sin(x)^2".parse().unwrap();

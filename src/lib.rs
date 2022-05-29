@@ -61,7 +61,7 @@ pub enum Function {
 
 /// Enumeration of all errors which can occur while evaluating a function.
 #[derive(Debug, PartialEq, Eq)]
-pub enum FunctionError {
+pub enum FunctionEvaluationError {
     /// Caused by division by zero.
     DivideByZero,
     /// Caused by `0^0`.
@@ -93,15 +93,15 @@ impl Function {
     /// ```
     ///
     /// ```
-    /// # use function::{Function, BinaryOperator, FunctionError};
+    /// # use function::{Function, BinaryOperator, FunctionEvaluationError};
     /// // 1/x
     /// let func = Function::BinaryOp(
     ///     Box::new(Function::Lit(1.0)),
     ///     BinaryOperator::Div,
     ///     Box::new(Function::Variable),
     /// );
-    /// assert_eq!(func.eval(0.0).unwrap_err(), FunctionError::DivideByZero);
-    pub fn eval(&self, value: f64) -> Result<f64, FunctionError> {
+    /// assert_eq!(func.eval(0.0).unwrap_err(), FunctionEvaluationError::DivideByZero);
+    pub fn eval(&self, value: f64) -> Result<f64, FunctionEvaluationError> {
         match self {
             Self::Lit(literal) => Ok(*literal),
             Self::BinaryOp(first, op, second) => {
@@ -581,21 +581,21 @@ pub enum BinaryOperator {
 }
 
 impl BinaryOperator {
-    fn eval(&self, first: f64, second: f64) -> Result<f64, FunctionError> {
+    fn eval(&self, first: f64, second: f64) -> Result<f64, FunctionEvaluationError> {
         match self {
             BinaryOperator::Plus => Ok(first + second),
             BinaryOperator::Minus => Ok(first - second),
             BinaryOperator::Times => Ok(first * second),
             BinaryOperator::Div => {
                 if second == 0.0 {
-                    Err(FunctionError::DivideByZero)
+                    Err(FunctionEvaluationError::DivideByZero)
                 } else {
                     Ok(first / second)
                 }
             }
             BinaryOperator::Pow => {
                 if first == 0.0 && second == 0.0 {
-                    Err(FunctionError::ZeroToZero)
+                    Err(FunctionEvaluationError::ZeroToZero)
                 } else {
                     Ok(f64::powf(first, second))
                 }
@@ -624,7 +624,7 @@ pub enum UnaryOperator {
 }
 
 impl UnaryOperator {
-    fn eval(&self, input: f64) -> Result<f64, FunctionError> {
+    fn eval(&self, input: f64) -> Result<f64, FunctionEvaluationError> {
         match self {
             UnaryOperator::Negate => Ok(-input),
         }
@@ -649,7 +649,7 @@ pub enum BuiltinFunction {
 }
 
 impl BuiltinFunction {
-    fn eval(&self, input: f64) -> Result<f64, FunctionError> {
+    fn eval(&self, input: f64) -> Result<f64, FunctionEvaluationError> {
         match self {
             BuiltinFunction::Sin => Ok(f64::sin(input)),
         }

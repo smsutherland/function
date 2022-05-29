@@ -163,17 +163,21 @@ mod string_parse {
     }
 
     fn pow_expr(tokens: &mut token_iter!()) -> Result<Function> {
-        let mut lhs = item(tokens)?;
+        let mut pow_tree = Vec::new();
+        pow_tree.push(item(tokens)?);
         while let Some(FunctionToken {
             kind: FunctionTokenKind::Pow,
             pos: _,
         }) = tokens.peek()
         {
             tokens.next().unwrap();
-            let rhs = item(tokens)?;
-            lhs = Function::BinaryOp(Box::new(lhs), crate::BinaryOperator::Pow, Box::new(rhs))
+            pow_tree.push(item(tokens)?);
         }
-        Ok(lhs)
+        let mut result = pow_tree.pop().unwrap();
+        while let Some(base) = pow_tree.pop() {
+            result = Function::BinaryOp(Box::new(base), crate::BinaryOperator::Pow, Box::new(result));
+        }
+        Ok(result)
     }
 
     fn mul_expr(tokens: &mut token_iter!()) -> Result<Function> {
@@ -670,5 +674,14 @@ mod test {
     fn sum_many() {
         let func: Function = "-1 + 1 - 1 + 2*3^2*1".parse().unwrap();
         assert_eq!(func.eval(0.0).unwrap(), 17.0);
+    }
+
+    #[test]
+    fn pow_right_associative() {
+        // 3 ^ (2^3)
+        // 3^8
+        // 6561
+        let func: Function = "3^2^3".parse().unwrap();
+        assert_eq!(func.eval(0.0).unwrap(), 6561.0);
     }
 }

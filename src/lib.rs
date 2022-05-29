@@ -254,7 +254,7 @@ impl Display for Function {
 mod string_parse {
     use std::iter::Peekable;
 
-    use crate::Function;
+    use crate::{Function, UnaryOperator};
     type Result<T> = std::result::Result<T, FunctionParseError>;
 
     #[derive(Debug)]
@@ -320,9 +320,12 @@ mod string_parse {
                 }
             }
             FunctionTokenKind::Variable => Ok(Function::Variable),
+            FunctionTokenKind::Minus => {
+                let operand = item(tokens)?;
+                Ok(Function::UnaryOp(UnaryOperator::Negate, Box::new(operand)))
+            }
             FunctionTokenKind::RParen
             | FunctionTokenKind::Plus
-            | FunctionTokenKind::Minus
             | FunctionTokenKind::Times
             | FunctionTokenKind::Div
             | FunctionTokenKind::Pow
@@ -334,34 +337,33 @@ mod string_parse {
     }
 
     fn pow_expr(tokens: &mut token_iter!()) -> Result<Function> {
-        let lhs = item(tokens)?;
-        if let Some(FunctionToken {
+        let mut pow_tree = Vec::new();
+        pow_tree.push(item(tokens)?);
+        while let Some(FunctionToken {
             kind: FunctionTokenKind::Pow,
             pos: _,
         }) = tokens.peek()
         {
             tokens.next().unwrap();
-            let rhs = item(tokens)?;
-            Ok(Function::BinaryOp(
-                Box::new(lhs),
-                crate::BinaryOperator::Pow,
-                Box::new(rhs),
-            ))
-        } else {
-            Ok(lhs)
+            pow_tree.push(item(tokens)?);
         }
+        let mut result = pow_tree.pop().unwrap();
+        while let Some(base) = pow_tree.pop() {
+            result = Function::BinaryOp(Box::new(base), crate::BinaryOperator::Pow, Box::new(result));
+        }
+        Ok(result)
     }
 
     fn mul_expr(tokens: &mut token_iter!()) -> Result<Function> {
-        let lhs = pow_expr(tokens)?;
-        if let Some(FunctionToken {
+        let mut lhs = pow_expr(tokens)?;
+        while let Some(FunctionToken {
             kind: FunctionTokenKind::Times | FunctionTokenKind::Div,
             pos: _,
         }) = tokens.peek()
         {
             let op_token = tokens.next().unwrap();
             let rhs = pow_expr(tokens)?;
-            Ok(Function::BinaryOp(
+            lhs = Function::BinaryOp(
                 Box::new(lhs),
                 match op_token.kind {
                     FunctionTokenKind::Times => crate::BinaryOperator::Times,
@@ -369,22 +371,21 @@ mod string_parse {
                     _ => unreachable!(),
                 },
                 Box::new(rhs),
-            ))
-        } else {
-            Ok(lhs)
+            )
         }
+        Ok(lhs)
     }
 
     fn add_expr(tokens: &mut token_iter!()) -> Result<Function> {
-        let lhs = mul_expr(tokens)?;
-        if let Some(FunctionToken {
+        let mut lhs = mul_expr(tokens)?;
+        while let Some(FunctionToken {
             kind: FunctionTokenKind::Plus | FunctionTokenKind::Minus,
             pos: _,
         }) = tokens.peek()
         {
             let op_token = tokens.next().unwrap();
             let rhs = mul_expr(tokens)?;
-            Ok(Function::BinaryOp(
+            lhs = Function::BinaryOp(
                 Box::new(lhs),
                 match op_token.kind {
                     FunctionTokenKind::Plus => crate::BinaryOperator::Plus,
@@ -392,10 +393,9 @@ mod string_parse {
                     _ => unreachable!(),
                 },
                 Box::new(rhs),
-            ))
-        } else {
-            Ok(lhs)
+            );
         }
+        Ok(lhs)
     }
 
     fn function(tokens: &mut token_iter!()) -> Result<Function> {
@@ -864,5 +864,26 @@ mod test {
         println!("{}\n{}", func, reduced_func);
         let expected: Function = "4+x".parse().unwrap();
         assert_eq!(reduced_func, expected);
+    }
+
+    #[test]
+    fn sum_three() {
+        let func: Function = "1 + 1 + 1".parse().unwrap();
+        assert_eq!(func.eval(0.0).unwrap(), 3.0);
+    }
+
+    #[test]
+    fn sum_many() {
+        let func: Function = "-1 + 1 - 1 + 2*3^2*1".parse().unwrap();
+        assert_eq!(func.eval(0.0).unwrap(), 17.0);
+    }
+
+    #[test]
+    fn pow_right_associative() {
+        // 3 ^ (2^3)
+        // 3^8
+        // 6561
+        let func: Function = "3^2^3".parse().unwrap();
+        assert_eq!(func.eval(0.0).unwrap(), 6561.0);
     }
 }

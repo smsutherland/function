@@ -254,7 +254,7 @@ impl Display for Function {
 mod string_parse {
     use std::iter::Peekable;
 
-    use crate::{Function, UnaryOperator};
+    use crate::{BinaryOperator, BuiltinFunction, Function, UnaryOperator};
     type Result<T> = std::result::Result<T, FunctionParseError>;
 
     #[derive(Debug)]
@@ -273,7 +273,7 @@ mod string_parse {
         Times,
         Div,
         Pow,
-        Builtin(crate::BuiltinFunction),
+        Builtin(BuiltinFunction),
         Variable,
         Eof,
     }
@@ -349,7 +349,7 @@ mod string_parse {
         }
         let mut result = pow_tree.pop().unwrap();
         while let Some(base) = pow_tree.pop() {
-            result = Function::BinaryOp(Box::new(base), crate::BinaryOperator::Pow, Box::new(result));
+            result = Function::BinaryOp(Box::new(base), BinaryOperator::Pow, Box::new(result));
         }
         Ok(result)
     }
@@ -366,8 +366,8 @@ mod string_parse {
             lhs = Function::BinaryOp(
                 Box::new(lhs),
                 match op_token.kind {
-                    FunctionTokenKind::Times => crate::BinaryOperator::Times,
-                    FunctionTokenKind::Div => crate::BinaryOperator::Div,
+                    FunctionTokenKind::Times => BinaryOperator::Times,
+                    FunctionTokenKind::Div => BinaryOperator::Div,
                     _ => unreachable!(),
                 },
                 Box::new(rhs),
@@ -388,8 +388,8 @@ mod string_parse {
             lhs = Function::BinaryOp(
                 Box::new(lhs),
                 match op_token.kind {
-                    FunctionTokenKind::Plus => crate::BinaryOperator::Plus,
-                    FunctionTokenKind::Minus => crate::BinaryOperator::Minus,
+                    FunctionTokenKind::Plus => BinaryOperator::Plus,
+                    FunctionTokenKind::Minus => BinaryOperator::Minus,
                     _ => unreachable!(),
                 },
                 Box::new(rhs),
@@ -549,7 +549,7 @@ mod string_parse {
                         }
                         _ => {
                             if c == '(' {
-                                if let Ok(b) = current_token.parse::<crate::BuiltinFunction>() {
+                                if let Ok(b) = current_token.parse::<BuiltinFunction>() {
                                     tokens.push(FunctionToken {
                                         kind: FunctionTokenKind::Builtin(b),
                                         pos: token_start,
@@ -626,7 +626,7 @@ mod string_parse {
         UnmatchedParentheses,
     }
 }
-pub use crate::string_parse::{FunctionParseError, FunctionParseErrorCause};
+pub use string_parse::{FunctionParseError, FunctionParseErrorCause};
 
 impl FromStr for Function {
     type Err = string_parse::FunctionParseError;

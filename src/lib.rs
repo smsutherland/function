@@ -125,6 +125,77 @@ impl Function {
         }
     }
 
+    fn eval_literals(self) -> Result<Self, FunctionEvaluationError> {
+        match self {
+            Function::BinaryOp(left, op, right) => {
+                let left = left.eval_literals()?;
+                let right = right.eval_literals()?;
+                if let (&Function::Lit(left), &Function::Lit(right)) = (&left, &right) {
+                    Ok(Function::Lit(op.eval(left, right)?))
+                } else {
+                    Ok(Function::BinaryOp(Box::new(left), op, Box::new(right)))
+                }
+            }
+            Function::UnaryOp(op, operand) => {
+                let operand = operand.eval_literals()?;
+                if let &Function::Lit(operand) = &operand {
+                    Ok(Function::Lit(op.eval(operand)?))
+                } else {
+                    Ok(Function::UnaryOp(op, Box::new(operand)))
+                }
+            }
+            Function::Builtin(builtin, inside) => {
+                let inside = inside.eval_literals()?;
+                if let &Function::Lit(inside) = &inside {
+                    Ok(Function::Lit(builtin.eval(inside)?))
+                } else {
+                    Ok(Function::Builtin(builtin, Box::new(inside)))
+                }
+            }
+            Function::Composition(outer, inner) => {
+                let inner = inner.eval_literals()?;
+                let outer = outer.eval_literals()?;
+                if let &Function::Lit(outer) = &outer {
+                    Ok(Function::Lit(outer))
+                } else if let &Function::Lit(inner) = &inner {
+                    Ok(Function::Lit(outer.eval(inner)?))
+                } else {
+                    Ok(Function::Composition(Box::new(outer), Box::new(inner)))
+                }
+            }
+            Function::Lit(_) | Function::Variable => Ok(self),
+        }
+    }
+
+    /// Attempts to simplify a function to make eventual evaluations faster.
+    /// Goes through the following steps to optimize the function:
+    /// * literal evaluation
+    ///     - Traverses the function and evaluates operations that can be performed at "compile time."
+    ///     For example, the function `1 + 1` reduces to a literal `2`.
+    ///     Currently this does not handle literals which, though mathematically able to be evaluated,
+    ///     are not adjacent. `x + 1 + 1` would not reduce currently as the parser handles operators as
+    ///     left-associative, grouping the first 1 with the x rather than with the second 1.
+    /// ```
+    /// # use function::Function;
+    /// let func: Function = "1 + 1" .parse().unwrap();
+    /// let reduced = func.reduce().unwrap();
+    /// let expected: Function = "2".parse().unwrap();
+    /// assert_eq!(reduced, expected);
+    /// ```
+    /// # Errors
+    /// If in the process of simplifying the function, an evaluation error occurs
+    /// (such as in the case of the function `1/0`)
+    /// the reduction will fail and return an Err with the corresponding error.
+    /// ```
+    /// # use function::{Function, FunctionEvaluationError};
+    /// let func: Function = "1/0".parse().unwrap();
+    /// assert_eq!(func.reduce().unwrap_err(), FunctionEvaluationError::DivideByZero);
+    /// ```
+    pub fn reduce(&self) -> Result<Self, FunctionEvaluationError> {
+        let new = self.clone();
+        new.eval_literals()
+    }
+
     fn display_with_variable(&self, variable: &str) -> String {
         match self {
             Self::Lit(literal) => format!("{}", literal),
@@ -784,5 +855,14 @@ mod test {
     fn parse_sin() {
         let func: Function = "sin(pi*x)".parse().unwrap();
         assert_eq!(func.eval(1.0).unwrap(), f64::sin(PI));
+    }
+
+    #[test]
+    fn literal_reduction() {
+        let func: Function = "(sin(pi) + 2^2) + x".parse().unwrap();
+        let reduced_func = func.reduce().unwrap();
+        println!("{}\n{}", func, reduced_func);
+        let expected: Function = "4+x".parse().unwrap();
+        assert_eq!(reduced_func, expected);
     }
 }

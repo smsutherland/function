@@ -32,7 +32,7 @@
 //!
 //! [`FromStr`]: std::str::FromStr
 
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 use std::str::FromStr;
 
 pub use std::f64::consts::{E, PI};
@@ -57,6 +57,11 @@ pub enum Function {
     /// Represents the variable in a function (ex. the `x` in `x^2`).
     /// In a composition of functions, `Variable` inside the outer function represents the entire inner function.
     Variable,
+    /// Used to hold a reference to an existing function, which you wish to keep access to outside this function.
+    /// If you don't need to keep the reference outside of this function, I recommend moving it into this function
+    /// inside a Box in one of the other variants. Using this variant adds an extra level of indirection through the Rc
+    /// to using the held function, both for this and other uses of it.
+    Existing(Rc<Function>),
 }
 
 /// Enumeration of all errors which can occur while evaluating a function.
@@ -122,6 +127,7 @@ impl Function {
                 outer.eval(inner_value)
             }
             Self::Variable => Ok(value),
+            Self::Existing(other) => other.eval(value),
         }
     }
 
@@ -164,6 +170,7 @@ impl Function {
                 }
             }
             Self::Lit(_) | Self::Variable => Ok(self),
+            Self::Existing(_) => Ok(self),
         }
     }
 
@@ -216,6 +223,7 @@ impl Function {
                 outer.display_with_variable(&inner_str)
             }
             Self::Variable => variable.to_string(),
+            Self::Existing(other) => other.display_with_variable(variable),
         }
     }
 
@@ -885,5 +893,14 @@ mod test {
         // 6561
         let func: Function = "3^2^3".parse().unwrap();
         assert_eq!(func.eval(0.0).unwrap(), 6561.0);
+    }
+
+    #[test]
+    fn existing() {
+        let func1: Function = "1 + x".parse().unwrap();
+        let func1 = Rc::new(func1);
+        let func2 = Function::BinaryOp(Box::new(Function::Variable), BinaryOperator::Plus, Box::new(Function::Existing(func1.clone())));
+        println!("{}", func2);
+        assert_eq!(5.0, func2.eval(2.0).unwrap());
     }
 }

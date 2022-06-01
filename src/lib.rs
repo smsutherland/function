@@ -127,43 +127,43 @@ impl Function {
 
     fn eval_literals(self) -> Result<Self, FunctionEvaluationError> {
         match self {
-            Function::BinaryOp(left, op, right) => {
+            Self::BinaryOp(left, op, right) => {
                 let left = left.eval_literals()?;
                 let right = right.eval_literals()?;
-                if let (&Function::Lit(left), &Function::Lit(right)) = (&left, &right) {
-                    Ok(Function::Lit(op.eval(left, right)?))
+                if let (&Self::Lit(left), &Self::Lit(right)) = (&left, &right) {
+                    Ok(Self::Lit(op.eval(left, right)?))
                 } else {
-                    Ok(Function::BinaryOp(Box::new(left), op, Box::new(right)))
+                    Ok(Self::BinaryOp(Box::new(left), op, Box::new(right)))
                 }
             }
-            Function::UnaryOp(op, operand) => {
+            Self::UnaryOp(op, operand) => {
                 let operand = operand.eval_literals()?;
-                if let &Function::Lit(operand) = &operand {
-                    Ok(Function::Lit(op.eval(operand)?))
+                if let &Self::Lit(operand) = &operand {
+                    Ok(Self::Lit(op.eval(operand)?))
                 } else {
-                    Ok(Function::UnaryOp(op, Box::new(operand)))
+                    Ok(Self::UnaryOp(op, Box::new(operand)))
                 }
             }
-            Function::Builtin(builtin, inside) => {
+            Self::Builtin(builtin, inside) => {
                 let inside = inside.eval_literals()?;
-                if let &Function::Lit(inside) = &inside {
-                    Ok(Function::Lit(builtin.eval(inside)?))
+                if let &Self::Lit(inside) = &inside {
+                    Ok(Self::Lit(builtin.eval(inside)?))
                 } else {
-                    Ok(Function::Builtin(builtin, Box::new(inside)))
+                    Ok(Self::Builtin(builtin, Box::new(inside)))
                 }
             }
-            Function::Composition(outer, inner) => {
+            Self::Composition(outer, inner) => {
                 let inner = inner.eval_literals()?;
                 let outer = outer.eval_literals()?;
-                if let &Function::Lit(outer) = &outer {
-                    Ok(Function::Lit(outer))
-                } else if let &Function::Lit(inner) = &inner {
-                    Ok(Function::Lit(outer.eval(inner)?))
+                if let &Self::Lit(outer) = &outer {
+                    Ok(Self::Lit(outer))
+                } else if let &Self::Lit(inner) = &inner {
+                    Ok(Self::Lit(outer.eval(inner)?))
                 } else {
-                    Ok(Function::Composition(Box::new(outer), Box::new(inner)))
+                    Ok(Self::Composition(Box::new(outer), Box::new(inner)))
                 }
             }
-            Function::Lit(_) | Function::Variable => Ok(self),
+            Self::Lit(_) | Self::Variable => Ok(self),
         }
     }
 

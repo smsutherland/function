@@ -32,8 +32,8 @@
 //!
 //! [`FromStr`]: std::str::FromStr
 
-use std::{fmt::Display, rc::Rc};
 use std::str::FromStr;
+use std::{fmt::Display, rc::Rc};
 
 pub use std::f64::consts::{E, PI};
 
@@ -170,7 +170,20 @@ impl Function {
                 }
             }
             Self::Lit(_) | Self::Variable => Ok(self),
-            Self::Existing(_) => Ok(self),
+            // Because eval_literals takes ownership of the Function, we have to clone the contained Function
+            // and process that, effectively severing the link between this Function and the contained Function
+            // Function. This does lead to a possible optimization by which Functions using an Existing can
+            // "inline" the function. This works because the purpose of Existing is to reference other existing
+            // Functions. In operating on a clone, we lose that connection and hence a) there is no purpose
+            // to the indirection caused by the Rc and b) no other functions can reference this clone, also
+            // eliminating the purpose of storing it behind an Rc. This optimization is not performed currently
+            // because I hope to find a solution which would not break the link between Functions (and hence
+            // invalidating the optimization).
+            // Alternately, we could keep the function as is, but this would mean that there is no way to reduce
+            // a function once it is inside an Rc.
+            // TODO: Find a way to handle this such that this issue does not persist, or at the very least
+            // minimize the downsides.
+            Self::Existing(other) => (*other).clone().eval_literals(),
         }
     }
 
@@ -899,7 +912,11 @@ mod test {
     fn existing() {
         let func1: Function = "1 + x".parse().unwrap();
         let func1 = Rc::new(func1);
-        let func2 = Function::BinaryOp(Box::new(Function::Variable), BinaryOperator::Plus, Box::new(Function::Existing(func1.clone())));
+        let func2 = Function::BinaryOp(
+            Box::new(Function::Variable),
+            BinaryOperator::Plus,
+            Box::new(Function::Existing(func1.clone())),
+        );
         println!("{}", func2);
         assert_eq!(5.0, func2.eval(2.0).unwrap());
     }
